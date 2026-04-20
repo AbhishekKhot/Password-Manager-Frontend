@@ -1,30 +1,68 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, UseAuth } from './context/AuthContext';
+import { ToastProvider } from './components/Toast';
+import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Vault from './pages/Vault';
+import Unlock from './pages/Unlock';
 import './index.css';
 
-// Protected route wrapper
+/**
+ * Gatekeeper wrapper for routes that require an authenticated + unlocked session.
+ *
+ * Decision table:
+ *   | authed | encryptionKey | action                    |
+ *   | false  |    (any)      | → /login (no session)     |
+ *   | true   |    null       | → /unlock (session alive, |
+ *   |        |               |   but key not in memory)  |
+ *   | true   |    present    | render children           |
+ *
+ * Why two separate redirects (not one "login or unlock" path):
+ *   The UX is different. /login asks for email + password and issues a
+ *   new JWT + refresh pair. /unlock asks for password only and reuses
+ *   the existing refresh cookie — no network auth round-trip, faster UX,
+ *   and doesn't revoke their other active sessions.
+ *
+ * `replace` on Navigate: replaces the current history entry instead of
+ * pushing a new one, so the back button doesn't bounce users between
+ * /vault and /login during an auth failure loop.
+ */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { token } = UseAuth();
-  if (!token) return <Navigate to="/login" replace />;
+  const { authed, encryptionKey } = UseAuth();
+  if (!authed) return <Navigate to="/login" replace />;
+  if (!encryptionKey) return <Navigate to="/unlock" replace />;
   return <>{children}</>;
 }
 
+/**
+ * Route table.
+ *
+ * Why the `<AppContent>` indirection:
+ *   `UseAuth` must be called under `<AuthProvider>`. Putting <Routes>
+ *   directly at the top level would risk ProtectedRoute trying to read
+ *   the context before the provider mounts. The wrapper keeps tree depth
+ *   explicit: ErrorBoundary > ToastProvider > AuthProvider > BrowserRouter
+ *   > AppContent > Routes.
+ *
+ * Unknown-path fallback: `<Route path="*">` sends any unmatched URL to
+ * /login rather than a 404 page — the app only has four routes so a stray
+ * URL is almost certainly a user who needs to sign in.
+ */
 function AppContent() {
   return (
     <div className="app-container">
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route 
-          path="/vault" 
+        <Route path="/unlock" element={<Unlock />} />
+        <Route
+          path="/vault"
           element={
             <ProtectedRoute>
               <Vault />
             </ProtectedRoute>
-          } 
+          }
         />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
@@ -32,13 +70,26 @@ function AppContent() {
   );
 }
 
+/**
+ * Root component. Provider order is deliberate — outside-in:
+ *   1. ErrorBoundary — outermost so a throw in any provider is caught.
+ *   2. ToastProvider — independent; wrapping auth means toasts fired
+ *      during login flows have somewhere to render.
+ *   3. AuthProvider — consumes apiFetch (network), provides UseAuth.
+ *   4. BrowserRouter — innermost; router hooks are only used by routes
+ *      and their children, not by the providers above.
+ */
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </AuthProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
 
