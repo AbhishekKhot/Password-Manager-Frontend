@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { UseAuth } from "../context/AuthContext";
-import { deriveKeys } from "../utils/crypto";
-import { apiFetch } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
+import { deriveKeys } from "../../../shared/utils/crypto";
+import { authApi, ApiError } from "../../../api";
 
 /**
  * Login page.
@@ -34,7 +34,7 @@ export default function Login() {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
-    const { login } = UseAuth();
+    const { login } = useAuth();
     const navigate = useNavigate();
 
     /**
@@ -53,27 +53,30 @@ export default function Login() {
         setLoading(true);
 
         try {
-            const saltRes = await apiFetch(`/auth/salt?email=${encodeURIComponent(email)}`);
-            if (!saltRes.ok) {
-                if (saltRes.status === 404) throw new Error("User not found. Please register first.");
+            let salt: string;
+            let iterations: number;
+            try {
+                ({ salt, iterations } = await authApi.getSalt(email));
+            } catch (err) {
+                if (err instanceof ApiError && err.is(404)) {
+                    throw new Error("User not found. Please register first.");
+                }
                 throw new Error("Failed to fetch salt");
             }
-            const { salt, iterations } = await saltRes.json();
 
             const { encryptionKey, authHash } = await deriveKeys(password, salt, iterations);
 
-            const loginRes = await apiFetch("/auth/login", {
-                method: "POST",
-                body: JSON.stringify({ email, auth_hash: authHash }),
-            });
-
-            if (loginRes.ok) {
+            try {
+                await authApi.login({ email, auth_hash: authHash });
                 login(encryptionKey);
                 navigate("/vault");
-            } else {
-                // Try to surface the server's error string, fall back to a generic 401 message.
-                const data = await loginRes.json().catch(() => ({}));
-                setError(data.error || "Invalid credentials.");
+            } catch (err) {
+                // ApiError.message already carries the server's `{ error }` payload.
+                if (err instanceof ApiError) {
+                    setError(err.message || "Invalid credentials.");
+                } else {
+                    throw err;
+                }
             }
         } catch (err) {
             console.error(err);

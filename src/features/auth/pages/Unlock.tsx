@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { UseAuth } from "../context/AuthContext";
-import { deriveKeys } from "../utils/crypto";
-import { apiFetch } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
+import { deriveKeys } from "../../../shared/utils/crypto";
+import { authApi } from "../../../api";
 
 /**
  * Unlock page.
@@ -30,7 +30,7 @@ export default function Unlock() {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
-    const { login, logout } = UseAuth();
+    const { login, logout } = useAuth();
     const navigate = useNavigate();
 
     /**
@@ -45,9 +45,13 @@ export default function Unlock() {
         setError("");
         setLoading(true);
         try {
-            const saltRes = await apiFetch(`/auth/salt?email=${encodeURIComponent(email)}`);
-            if (!saltRes.ok) throw new Error("Could not fetch salt for this account");
-            const { salt, iterations } = await saltRes.json();
+            let salt: string;
+            let iterations: number;
+            try {
+                ({ salt, iterations } = await authApi.getSalt(email));
+            } catch {
+                throw new Error("Could not fetch salt for this account");
+            }
 
             const { encryptionKey } = await deriveKeys(password, salt, iterations);
             login(encryptionKey);

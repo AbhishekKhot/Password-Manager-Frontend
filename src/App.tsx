@@ -1,11 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, UseAuth } from './context/AuthContext';
-import { ToastProvider } from './components/Toast';
-import ErrorBoundary from './components/ErrorBoundary';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Vault from './pages/Vault';
-import Unlock from './pages/Unlock';
+import { AuthProvider, useAuth } from './features/auth/context/AuthContext';
+import { ToastProvider } from './shared/components/Toast';
+import ErrorBoundary from './shared/components/ErrorBoundary';
+import Login from './features/auth/pages/Login';
+import Register from './features/auth/pages/Register';
+import Vault from './features/vault/pages/Vault';
+import Unlock from './features/auth/pages/Unlock';
 import './index.css';
 
 /**
@@ -29,7 +29,7 @@ import './index.css';
  * /vault and /login during an auth failure loop.
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { authed, encryptionKey } = UseAuth();
+  const { authed, encryptionKey } = useAuth();
   if (!authed) return <Navigate to="/login" replace />;
   if (!encryptionKey) return <Navigate to="/unlock" replace />;
   return <>{children}</>;
@@ -39,7 +39,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
  * Route table.
  *
  * Why the `<AppContent>` indirection:
- *   `UseAuth` must be called under `<AuthProvider>`. Putting <Routes>
+ *   `useAuth` must be called under `<AuthProvider>`. Putting <Routes>
  *   directly at the top level would risk ProtectedRoute trying to read
  *   the context before the provider mounts. The wrapper keeps tree depth
  *   explicit: ErrorBoundary > ToastProvider > AuthProvider > BrowserRouter
@@ -75,7 +75,7 @@ function AppContent() {
  *   1. ErrorBoundary — outermost so a throw in any provider is caught.
  *   2. ToastProvider — independent; wrapping auth means toasts fired
  *      during login flows have somewhere to render.
- *   3. AuthProvider — consumes apiFetch (network), provides UseAuth.
+ *   3. AuthProvider — consumes the axios api layer, provides useAuth.
  *   4. BrowserRouter — innermost; router hooks are only used by routes
  *      and their children, not by the providers above.
  */

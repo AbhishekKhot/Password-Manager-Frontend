@@ -193,7 +193,11 @@ export async function encryptData(encryptionKey: CryptoKey, data: unknown) {
  * The caller (Vault.tsx) catches the throw and renders the row as
  * "Decryption Failed" so one corrupt item doesn't break the whole list.
  */
-export async function decryptData(encryptionKey: CryptoKey, ivHex: string, encryptedHex: string) {
+export async function decryptData<T = unknown>(
+    encryptionKey: CryptoKey,
+    ivHex: string,
+    encryptedHex: string
+): Promise<T> {
     const ivBuffer = hexToBuffer(ivHex);
     const ciphertextBuffer = hexToBuffer(encryptedHex);
 
@@ -204,5 +208,6 @@ export async function decryptData(encryptionKey: CryptoKey, ivHex: string, encry
     );
 
     const decoder = new TextDecoder();
-    return JSON.parse(decoder.decode(decryptedBuffer));
+    // JSON.parse is inherently `any`; narrow via the call-site type parameter.
+    return JSON.parse(decoder.decode(decryptedBuffer)) as T;
 }

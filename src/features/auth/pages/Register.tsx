@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { deriveKeys, generateSalt } from "../utils/crypto";
-import { validateMasterPassword } from "../utils/passwordPolicy";
-import { apiFetch } from "../utils/api";
-import { useToast } from "../components/toastContext";
+import { deriveKeys, generateSalt } from "../../../shared/utils/crypto";
+import { validateMasterPassword } from "../../../shared/utils/passwordPolicy";
+import { authApi, ApiError } from "../../../api";
+import { useToast } from "../../../shared/components/toastContext";
 
 /**
  * Default PBKDF2 iteration count for newly-registered users.
@@ -68,22 +68,17 @@ export default function Register() {
             const salt = generateSalt();
             const { authHash } = await deriveKeys(password, salt, DEFAULT_PBKDF2_ITERATIONS);
 
-            const res = await apiFetch("/auth/register", {
-                method: "POST",
-                body: JSON.stringify({ email, auth_hash: authHash, kdf_salt: salt }),
-            });
-
-            if (res.ok) {
-                // Toast instead of inline success because we navigate away immediately.
-                toast("success", "Account created. Please log in.");
-                navigate("/login");
-            } else {
-                const data = await res.json().catch(() => ({}));
-                setError(data.error || "Registration failed");
-            }
+            await authApi.register({ email, auth_hash: authHash, kdf_salt: salt });
+            // Toast instead of inline success because we navigate away immediately.
+            toast("success", "Account created. Please log in.");
+            navigate("/login");
         } catch (err) {
             console.error(err);
-            setError("Error during registration. Please try again.");
+            if (err instanceof ApiError) {
+                setError(err.message || "Registration failed");
+            } else {
+                setError("Error during registration. Please try again.");
+            }
         } finally {
             setLoading(false);
         }

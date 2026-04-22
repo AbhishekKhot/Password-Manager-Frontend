@@ -37,7 +37,7 @@ interface Props {
  *   8 to 32 covers the practical range. <8 is never acceptable; >32 rarely
  *   accepted by websites' max-length fields.
  */
-export default function PasswordGenerator({ onGenerate }: Props) {
+export function PasswordGenerator({ onGenerate }: Props) {
   const [length, setLength] = useState(16);
 
   const generate = () => {
